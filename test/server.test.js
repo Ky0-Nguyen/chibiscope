@@ -60,6 +60,7 @@ test('server ingests hooks, dedupes, streams, and guards its host', async (t) =>
   const cross = await runHook(port, 'claude', { hook_event_name: 'PreToolUse', cursor_version: '3.21.16', conversation_id: 'C', tool_name: 'Read', tool_input: {} });
   assert.deepEqual(cross, { code: 0, out: '' });
 
+  await new Promise((r) => setTimeout(r, 250)); // hook events are held ~150ms for ordering
   const state = JSON.parse((await request(port, { path: '/api/state' })).body);
   assert.deepEqual(state.events.map((e) => [e.source, e.type, e.cat]), [['claude', 'tool.start', 'test'], ['cursor', 'prompt', undefined]]);
   await new Promise((r) => setTimeout(r, 50));
@@ -103,4 +104,11 @@ test('run.sh works with a GUI-style PATH and never fails', async () => {
   assert.deepEqual(bare, { code: 0, out: '{"continue":true}' });
   const stop = await run({ PATH: '/nonexistent', HOME: '/nonexistent', CHIBISCOPE_NODE: '/nonexistent/node', CHIBISCOPE_PORT: '1' }, { hook_event_name: 'stop' });
   assert.deepEqual(stop, { code: 0, out: '{}' });
+});
+
+test('hook batches are released in hook order, start before its own end', async () => {
+  const { orderBatch } = await import('../src/server.js');
+  const e = (type, call, ts, session = 's') => ({ type, call, ts, session });
+  const out = orderBatch([e('tool.end', 'a', 1005), e('prompt', undefined, 1000), e('tool.start', 'a', 1007), e('tool.start', 'b', 1006)]);
+  assert.deepEqual(out.map((x) => `${x.type}:${x.call ?? ''}`), ['prompt:', 'tool.start:a', 'tool.end:a', 'tool.start:b']);
 });

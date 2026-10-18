@@ -160,6 +160,12 @@ function addTimeline(ev, s, live) {
   const item = { ev, li };
   timeline.push(item);
   if (ev.type === 'tool.start') byCall.set(`${ev.session}|${ev.call}`, item);
+  if (ev.type === 'tool.end') {
+    // end arrived before its start (async hooks): show it as a finished call
+    li.classList.add(ev.ok === false ? 'fail' : 'ok');
+    li.querySelector('.res').textContent = `${ev.ok === false ? '✗' : '✓'}${ev.ms != null ? ' ' + (ev.ms < 1000 ? ev.ms + 'ms' : (ev.ms / 1000).toFixed(1) + 's') : ''}`;
+    if (ev.call) byCall.set(`${ev.session}|${ev.call}`, item);
+  }
   if (timeline.length > 400) {
     const old = timeline.shift();
     old.li.remove();

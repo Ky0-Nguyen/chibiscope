@@ -9,7 +9,7 @@
       "name": "chibiscope",
       "source": "./",
       "description": "Observe-only hooks that stream Claude Code activity to the local ChibiScope dashboard (http://127.0.0.1:4777).",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }

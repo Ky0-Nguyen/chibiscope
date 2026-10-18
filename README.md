@@ -60,7 +60,7 @@ system tray, keeps the local server running, and opens the map in its own window
   starting a second one.
 
 **Download:** [latest release](https://github.com/Ky0-Nguyen/chibiscope/releases/latest)
-(`ChibiScope-0.1.0-arm64.dmg` for Apple Silicon Macs).
+(the `-arm64.dmg` is for Apple Silicon Macs).
 
 Or build the installers yourself:
 
@@ -68,7 +68,7 @@ Or build the installers yourself:
 cd desktop
 npm install
 npm start            # run from source
-npm run dist:mac     # dist/ChibiScope-0.1.0-arm64.dmg + .zip
+npm run dist:mac     # dist/ChibiScope-<version>-arm64.dmg + .zip
 npm run dist:win     # NSIS installer (build on Windows for best results)
 npm run dist:linux   # AppImage
 ```
@@ -97,11 +97,11 @@ Claude Code users add the plugin straight from GitHub:
 /plugin install chibiscope@chibiscope
 ```
 
-Non-developers: send them the desktop installer (`ChibiScope-0.1.0-arm64.dmg`, see above).
+Non-developers: send them the desktop installer from the [releases page](https://github.com/Ky0-Nguyen/chibiscope/releases/latest).
 
-Offline, hand over files instead: `npm pack` makes `chibiscope-0.1.0.tgz`
-(`npm install -g ./chibiscope-0.1.0.tgz` on the other machine), and `npm run package:vscode` makes a
-`.vsix` for VS Code, Cursor or Windsurf (`cursor --install-extension chibiscope-0.1.0.vsix`).
+Offline, hand over files instead: `npm pack` makes `chibiscope-<version>.tgz`
+(`npm install -g ./chibiscope-<version>.tgz` on the other machine), and `npm run package:vscode` makes a
+`.vsix` for VS Code, Cursor or Windsurf (`cursor --install-extension chibiscope-<version>.vsix`).
 Avoid `npx chibiscope install …`: the hooks would point into npx's temporary cache.
 
 ## Connect your agents
@@ -176,8 +176,8 @@ The same package is an editor extension. It runs the server inside the editor (o
 is already running) and shows the map in a panel next to your code.
 
 ```bash
-npm run package:vscode                # builds chibiscope-0.1.0.vsix with @vscode/vsce
-cursor --install-extension chibiscope-0.1.0.vsix   # or: code --install-extension …
+npm run package:vscode                          # builds chibiscope-<version>.vsix with @vscode/vsce
+cursor --install-extension chibiscope-<version>.vsix   # or: code --install-extension …
 ```
 
 Commands: **ChibiScope: Open Agent Map**, **Open in Browser**, **Play Demo**,
@@ -204,8 +204,13 @@ Commands: **ChibiScope: Open Agent Map**, **Open in Browser**, **Play Demo**,
 
 ## Privacy and safety
 
-- The server binds to `127.0.0.1` only and rejects foreign `Host` and `Origin` headers, so a web page
-  cannot read your prompts through DNS rebinding or inject fake events.
+- The server binds to `127.0.0.1` only, so other machines cannot reach it. It rejects foreign `Host`
+  and `Origin` headers, so a web page you visit cannot read your prompts (DNS rebinding) or inject
+  or clear events.
+- Programs running on your own machine (curl, scripts) are not blocked. They could already read
+  your agents' transcripts in `~/.claude` and `~/.codex`, so a token would add little. On a Mac
+  shared by several user accounts, another account could reach `127.0.0.1:4777` too; don't run
+  ChibiScope there if that matters to you.
 - Events are kept **in memory only** (last 3000) and are never written to disk or sent anywhere.
 - Hooks are observe-only. Claude hooks run with `async: true`; Cursor gets only non-permission hooks.
 - Installers merge into your existing config, tag their entries with `--chibiscope`, keep a

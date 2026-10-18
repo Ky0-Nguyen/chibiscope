@@ -16,8 +16,10 @@ const ts = Date.now();
 const source = (process.argv[2] || 'agent').replace(/[^a-z0-9_-]/gi, '');
 const port = Number(process.env.CHIBISCOPE_PORT) || 4777;
 
-// Responses Cursor wants on stdout. Only non-permission hooks are installed,
-// so nothing here can approve or deny an action.
+// Responses Cursor wants on stdout. For Cursor only non-permission hooks are
+// installed; Claude Code hooks (PermissionRequest included) run with
+// async: true and print nothing. Either way this bridge cannot approve or
+// deny an action.
 function cursorReply(event) {
   if (event === 'beforeSubmitPrompt') return { continue: true };
   return {};

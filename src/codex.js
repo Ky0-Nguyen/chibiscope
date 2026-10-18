@@ -21,15 +21,21 @@ export function createCodexContext(sessionHint) {
     cwd: undefined,
     calls: new Map(), // call_id -> start event (open)
     seen: new Set(), // call ids we've already emitted a start for
-    lastTexts: [], // de-dupe the same message arriving via two channels
+    recent: new Map(), // text key -> ts, to drop the copy that arrives via the second channel
   };
 }
 
-function remember(ctx, key) {
-  if (ctx.lastTexts.includes(key)) return false;
-  ctx.lastTexts.push(key);
-  if (ctx.lastTexts.length > 40) ctx.lastTexts.shift();
-  return true;
+// Newer Codex writes the same prompt/message/reasoning twice (event_msg and
+// item_completed) within milliseconds. Only those near-simultaneous copies are
+// dropped; a prompt you really type twice still shows twice.
+const DEDUPE_MS = 5000;
+function remember(ctx, key, ts) {
+  const prev = ctx.recent.get(key);
+  ctx.recent.set(key, ts);
+  if (ctx.recent.size > 200) {
+    for (const [k, t] of ctx.recent) if (Math.abs(ts - t) > DEDUPE_MS) ctx.recent.delete(k);
+  }
+  return prev == null || Math.abs(ts - prev) > DEDUPE_MS;
 }
 
 function textOf(content) {
@@ -133,7 +139,7 @@ export function normalizeCodexLine(o, ctx, now = Date.now()) {
         break;
       case 'reasoning': {
         const t = textOf(p.summary?.map?.((s) => s.text ?? s));
-        if (t && remember(ctx, 'think:' + t)) out.push({ ...base, type: 'think', text: clip(t, TEXT) });
+        if (t && remember(ctx, 'think:' + t, base.ts)) out.push({ ...base, type: 'think', text: clip(t, TEXT) });
         break;
       }
       default:
@@ -148,14 +154,14 @@ export function normalizeCodexLine(o, ctx, now = Date.now()) {
     switch (p.type) {
       case 'user_message': {
         const t = p.message || textOf(p.content);
-        if (t && remember(ctx, 'prompt:' + t)) out.push({ ...base, type: 'prompt', text: clip(t, TEXT) });
+        if (t && remember(ctx, 'prompt:' + t, base.ts)) out.push({ ...base, type: 'prompt', text: clip(t, TEXT) });
         break;
       }
       case 'agent_message':
-        if (p.message && remember(ctx, 'say:' + p.message)) out.push({ ...base, type: 'say', text: clip(p.message, TEXT) });
+        if (p.message && remember(ctx, 'say:' + p.message, base.ts)) out.push({ ...base, type: 'say', text: clip(p.message, TEXT) });
         break;
       case 'agent_reasoning':
-        if (p.text && remember(ctx, 'think:' + p.text)) out.push({ ...base, type: 'think', text: clip(p.text, TEXT) });
+        if (p.text && remember(ctx, 'think:' + p.text, base.ts)) out.push({ ...base, type: 'think', text: clip(p.text, TEXT) });
         break;
       case 'task_complete':
         out.push({ ...base, type: 'turn.end', ok: true, text: clip(p.last_agent_message, TEXT), ms: p.duration_ms });
@@ -190,17 +196,17 @@ function normalizeItem(it, p, { instant, out, base, ctx }) {
   switch (it.type) {
     case 'UserMessage': {
       const t = textOf(it.content);
-      if (t && remember(ctx, 'prompt:' + t)) out.push({ ...base, type: 'prompt', text: clip(t, TEXT) });
+      if (t && remember(ctx, 'prompt:' + t, base.ts)) out.push({ ...base, type: 'prompt', text: clip(t, TEXT) });
       break;
     }
     case 'AgentMessage': {
       const t = textOf(it.content);
-      if (t && remember(ctx, 'say:' + t)) out.push({ ...base, type: 'say', text: clip(t, TEXT), meta: it.phase ? { phase: it.phase } : undefined });
+      if (t && remember(ctx, 'say:' + t, base.ts)) out.push({ ...base, type: 'say', text: clip(t, TEXT), meta: it.phase ? { phase: it.phase } : undefined });
       break;
     }
     case 'Reasoning': {
       const t = (it.summary_text || []).join(' ').trim();
-      if (t && remember(ctx, 'think:' + t)) out.push({ ...base, type: 'think', text: clip(t, TEXT) });
+      if (t && remember(ctx, 'think:' + t, base.ts)) out.push({ ...base, type: 'think', text: clip(t, TEXT) });
       break;
     }
     case 'CommandExecution': {
@@ -246,6 +252,9 @@ function normalizeItem(it, p, { instant, out, base, ctx }) {
 
 /* -------------------------------------------------------------------- Watcher */
 
+const IDLE_PARK_MS = 30 * 60e3; // drop parser state for files quiet this long
+const MAX_PARTIAL = 16 << 20; // a "line" this long without a newline is garbage
+
 function pad(n) { return String(n).padStart(2, '0'); }
 function dayDir(root, d) { return path.join(root, String(d.getFullYear()), pad(d.getMonth() + 1), pad(d.getDate())); }
 
@@ -255,13 +264,14 @@ function listRollouts(dir) {
   } catch { return []; }
 }
 
-function walkRecent(root, sinceMs, out = [], depth = 0) {
+/** Rollout files modified since `sinceMs`, skipping ones we already track. */
+function walkRecent(root, sinceMs, skip, out = [], depth = 0) {
   let entries;
   try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return out; }
   for (const e of entries) {
     const p = path.join(root, e.name);
-    if (e.isDirectory() && depth < 3) walkRecent(p, sinceMs, out, depth + 1);
-    else if (e.isFile() && e.name.startsWith('rollout-') && e.name.endsWith('.jsonl')) {
+    if (e.isDirectory() && depth < 3) walkRecent(p, sinceMs, skip, out, depth + 1);
+    else if (e.isFile() && e.name.startsWith('rollout-') && e.name.endsWith('.jsonl') && !skip.has(p)) {
       try { if (fs.statSync(p).mtimeMs >= sinceMs) out.push(p); } catch { /* gone */ }
     }
   }
@@ -274,22 +284,39 @@ function readFirstLine(file) {
     fd = fs.openSync(file, 'r');
     const buf = Buffer.alloc(1 << 20);
     const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    const s = buf.subarray(0, n).toString('utf8');
-    const nl = s.indexOf('\n');
-    return nl === -1 ? null : JSON.parse(s.slice(0, nl));
+    const nl = buf.subarray(0, n).indexOf(0x0a);
+    return nl === -1 ? null : JSON.parse(buf.subarray(0, nl).toString('utf8'));
   } catch { return null; } finally { if (fd != null) fs.closeSync(fd); }
 }
 
 /**
- * Tail Codex rollout files. Calls `emit(events[])` for new activity.
- * Existing history is skipped; files created after start are read from byte 0.
+ * Split complete lines at the byte level. A read can end in the middle of a
+ * multi-byte UTF-8 character (Vietnamese diacritics are 2-3 bytes); decoding
+ * only whole lines keeps that character intact instead of turning it into U+FFFD.
  */
-export function watchCodex(emit, { home = process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), interval = 800, log = () => {} } = {}) {
+export function takeLines(rest, chunk) {
+  const data = rest.length ? Buffer.concat([rest, chunk]) : chunk;
+  const nl = data.lastIndexOf(0x0a);
+  if (nl === -1) return { lines: [], rest: data.length > MAX_PARTIAL ? Buffer.alloc(0) : data };
+  return { lines: data.subarray(0, nl).toString('utf8').split('\n'), rest: Buffer.from(data.subarray(nl + 1)) };
+}
+
+/**
+ * Tail Codex rollout files. Calls `emit(events[])` for new activity.
+ * History from before the watcher started is skipped; files created afterwards
+ * are read from byte 0. Files that stay quiet are "parked": their parser state
+ * is dropped and only the read offset is kept, so a long-running server does
+ * not grow without bound, and nothing is lost when the session resumes.
+ */
+export function watchCodex(emit, { home = process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), interval = 800, idleMs = IDLE_PARK_MS, log = () => {} } = {}) {
   const root = path.join(home, 'sessions');
   const startedAt = Date.now();
-  const files = new Map(); // file -> { offset, rest, ctx }
+  const files = new Map(); // file -> { offset, rest: Buffer, ctx, lastData }
+  const parked = new Map(); // file -> { offset, session, cwd }
   let ticks = 0;
   let stopped = false;
+  let nextWalk = 0;
+  let walkEvery = 15e3;
 
   const track = (file, fromStart) => {
     if (files.has(file)) return;
@@ -297,20 +324,35 @@ export function watchCodex(emit, { home = process.env.CODEX_HOME || path.join(os
     try { size = fs.statSync(file).size; } catch { return; }
     const id = (path.basename(file).match(/([0-9a-f]{8}-[0-9a-f-]{27,})\.jsonl$/) || [])[1];
     const ctx = createCodexContext(id);
+    const p = parked.get(file);
+    if (p) {
+      ctx.session = p.session;
+      ctx.cwd = p.cwd;
+      parked.delete(file);
+      files.set(file, { offset: p.offset, rest: Buffer.alloc(0), ctx, lastData: Date.now() });
+      log(`codex: resumed ${path.basename(file)}`);
+      return;
+    }
     const meta = readFirstLine(file);
     if (meta?.type === 'session_meta') {
       ctx.session = 'codex:' + (meta.payload?.id || id);
       ctx.cwd = meta.payload?.cwd;
     }
-    files.set(file, { offset: fromStart ? 0 : size, rest: '', ctx });
+    files.set(file, { offset: fromStart ? 0 : size, rest: Buffer.alloc(0), ctx, lastData: Date.now() });
     log(`codex: tracking ${path.basename(file)}${fromStart ? ' (new)' : ''}`);
   };
 
   const read = (file, st) => {
     let size;
     try { size = fs.statSync(file).size; } catch { files.delete(file); return; }
-    if (size < st.offset) st.offset = 0; // truncated / rewritten
-    if (size === st.offset) return;
+    if (size < st.offset) { st.offset = 0; st.rest = Buffer.alloc(0); } // truncated / rewritten
+    if (size === st.offset) {
+      if (Date.now() - st.lastData > idleMs) {
+        parked.set(file, { offset: st.offset - st.rest.length, session: st.ctx.session, cwd: st.ctx.cwd });
+        files.delete(file);
+      }
+      return;
+    }
     const len = Math.min(size - st.offset, 8 << 20);
     const buf = Buffer.alloc(len);
     let fd;
@@ -319,9 +361,9 @@ export function watchCodex(emit, { home = process.env.CODEX_HOME || path.join(os
       fs.readSync(fd, buf, 0, len, st.offset);
     } catch { return; } finally { if (fd != null) fs.closeSync(fd); }
     st.offset += len;
-    const chunk = st.rest + buf.toString('utf8');
-    const lines = chunk.split('\n');
-    st.rest = lines.pop() || '';
+    st.lastData = Date.now();
+    const { lines, rest } = takeLines(st.rest, buf);
+    st.rest = rest;
     const events = [];
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -335,15 +377,23 @@ export function watchCodex(emit, { home = process.env.CODEX_HOME || path.join(os
   const scan = () => {
     if (stopped) return;
     ticks++;
-    const now = new Date();
-    const candidates = [...listRollouts(dayDir(root, now)), ...listRollouts(dayDir(root, new Date(now - 864e5)))];
-    // Resumed sessions append to old files: do a wider sweep every ~15s.
-    if (ticks % 20 === 1) candidates.push(...walkRecent(root, Date.now() - 10 * 60e3));
+    const now = Date.now();
+    const candidates = [...listRollouts(dayDir(root, new Date(now))), ...listRollouts(dayDir(root, new Date(now - 864e5)))];
+    // Resumed sessions append to files in old day folders, so sweep the whole
+    // tree now and then. The sweep backs off as history grows (cost ~ files).
+    if (now >= nextWalk) {
+      const t0 = performance.now();
+      candidates.push(...walkRecent(root, now - 10 * 60e3, files));
+      walkEvery = Math.min(120e3, Math.max(15e3, (performance.now() - t0) * 300));
+      nextWalk = now + walkEvery;
+    }
     for (const f of candidates) {
       if (files.has(f)) continue;
-      let birth = 0;
-      try { const s = fs.statSync(f); birth = s.birthtimeMs || s.ctimeMs; } catch { continue; }
-      track(f, ticks > 1 && birth >= startedAt - 1000);
+      let s;
+      try { s = fs.statSync(f); } catch { continue; }
+      const p = parked.get(f);
+      if (p) { if (s.size !== p.offset) track(f); continue; }
+      track(f, ticks > 1 && (s.birthtimeMs || s.ctimeMs) >= startedAt - 1000);
     }
     for (const [f, st] of files) read(f, st);
   };
@@ -351,5 +401,5 @@ export function watchCodex(emit, { home = process.env.CODEX_HOME || path.join(os
   scan();
   const timer = setInterval(scan, interval);
   timer.unref?.();
-  return { root, stop() { stopped = true; clearInterval(timer); }, files };
+  return { root, stop() { stopped = true; clearInterval(timer); }, files, parked, get walkEvery() { return walkEvery; } };
 }

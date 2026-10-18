@@ -13,6 +13,9 @@ test('shell commands land in the right zone', () => {
   assert.equal(classifyCommand('rg -n "Login" src'), 'search');
   assert.equal(classifyCommand('curl -s https://example.com'), 'web');
   assert.equal(classifyCommand('npm run build'), 'shell');
+  assert.equal(classifyCommand('npm run lint:check'), 'shell');
+  assert.equal(classifyCommand('cargo check'), 'shell');
+  assert.equal(classifyCommand('npm run test:unit'), 'test');
   assert.equal(classifyCommand(['/bin/zsh', '-lc', 'git diff']), 'git');
   assert.equal(stripShell("bash -lc 'FOO=1 npm test'"), 'npm test');
   assert.equal(classifyCommand('cat test/fixtures.json'), 'read');

@@ -1,7 +1,7 @@
 {
   "name": "chibiscope",
   "displayName": "ChibiScope",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Watch your AI coding agents (Claude Code, Codex, Cursor) work live: chibi characters walking a system-architecture map, plus a live sequence diagram.",
   "type": "module",
   "license": "MIT",
@@ -96,6 +96,7 @@
     "vscode/",
     "docs/",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "repository": {

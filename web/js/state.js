@@ -47,6 +47,7 @@ function newSession(ev) {
     status: 'idle', // idle | thinking | working | waiting | done | error | ended
     statusText: '',
     active: new Map(), // call -> tool.start event
+    started: new Set(), // calls we saw start
     finished: new Set(), // calls that ended (guards against out-of-order hooks)
     counts: {},
     tools: 0,
@@ -86,6 +87,25 @@ function row(s, r) {
   s.turn.rows.push(r);
   if (s.turn.rows.length > 160) s.turn.rows.splice(0, s.turn.rows.length - 160);
   return r;
+}
+
+function remember(set, call) {
+  set.add(call);
+  if (set.size > 4000) {
+    const keep = [...set].slice(-2000);
+    set.clear();
+    for (const c of keep) set.add(c);
+  }
+}
+
+function countCall(s, ev) {
+  s.tools += 1;
+  s.counts[ev.cat] = (s.counts[ev.cat] || 0) + 1;
+  if (ev.cat === 'mcp' && ev.mcp) s.mcps.set(ev.mcp, (s.mcps.get(ev.mcp) || 0) + 1);
+  if ((ev.cat === 'read' || ev.cat === 'write') && ev.target) {
+    const f = s.files.get(ev.target) || { n: 0 };
+    s.files.set(ev.target, { n: f.n + 1, cat: ev.cat, ts: ev.ts });
+  }
 }
 
 export const participantOf = (ev) => (ev.cat === 'mcp' && ev.mcp ? `mcp:${ev.mcp}` : ev.cat === 'ask' ? 'user' : ev.cat);
@@ -136,19 +156,14 @@ export function applyEvent(state, ev) {
       if (!s.active.size && s.status !== 'done') { s.status = 'thinking'; s.statusText = ev.text || ''; }
       break;
     case 'tool.start': {
-      if (ev.call && s.finished.has(ev.call)) break; // end already arrived
+      if (ev.call && s.finished.has(ev.call)) break; // its end already arrived (and was recorded)
       if (ev.call && s.active.has(ev.call)) break; // duplicate start
       const call = ev.call || `anon-${ev.id ?? ev.ts}`;
       const rec = { ...ev, call, from, row: null };
       s.active.set(call, rec);
       if (actor) actor.active.set(call, rec);
-      s.tools += 1;
-      s.counts[ev.cat] = (s.counts[ev.cat] || 0) + 1;
-      if (ev.cat === 'mcp' && ev.mcp) s.mcps.set(ev.mcp, (s.mcps.get(ev.mcp) || 0) + 1);
-      if ((ev.cat === 'read' || ev.cat === 'write') && ev.target) {
-        const f = s.files.get(ev.target) || { n: 0 };
-        s.files.set(ev.target, { n: f.n + 1, cat: ev.cat, ts: ev.ts });
-      }
+      remember(s.started, call);
+      countCall(s, ev);
       rec.row = row(s, { kind: 'msg', from, to: participantOf(ev), label: ev.target || ev.tool, cat: ev.cat, ts: ev.ts, state: 'open', call });
       s.status = 'working';
       s.statusText = `${CATS[ev.cat]?.verb || 'Using'} ${ev.target || ev.tool || ''}`.trim();
@@ -156,10 +171,6 @@ export function applyEvent(state, ev) {
     }
     case 'tool.end': {
       const call = ev.call;
-      if (call) {
-        s.finished.add(call);
-        if (s.finished.size > 4000) s.finished = new Set([...s.finished].slice(-2000));
-      }
       const rec = call && s.active.get(call);
       if (rec) {
         s.active.delete(call);
@@ -168,7 +179,14 @@ export function applyEvent(state, ev) {
           rec.row.state = ev.ok === false ? 'fail' : 'ok';
           rec.row.ms = ev.ms ?? Math.max(0, (ev.ts || 0) - (rec.ts || 0));
         }
+      } else if (call && !s.started.has(call) && !s.finished.has(call) && ev.cat) {
+        // Async hooks: the end overtook its start. Record the call as already
+        // finished so it is counted and drawn; the late start is then ignored.
+        countCall(s, ev);
+        row(s, { kind: 'msg', from, to: participantOf(ev), label: ev.target || ev.tool, cat: ev.cat, ts: ev.ts, state: ev.ok === false ? 'fail' : 'ok', ms: ev.ms, call });
+        ev.orphan = true;
       }
+      if (call) remember(s.finished, call);
       if (ev.ok === false) {
         s.errors += 1;
         s.status = 'error';

@@ -78,3 +78,77 @@ test('watcher tails new rollout files', async () => {
   assert.equal(got[1].session, 'codex:live-1');
   assert.equal(got[1].cwd, '/w/live');
 });
+
+test('a read boundary inside a Vietnamese character does not corrupt it', async () => {
+  const { takeLines } = await import('../src/codex.js');
+  const line = Buffer.from(JSON.stringify({ text: 'sửa lỗi đăng nhập' }) + '\n', 'utf8');
+  const cut = line.indexOf(Buffer.from('ử')) + 1; // split inside the 3-byte "ử"
+  const a = takeLines(Buffer.alloc(0), line.subarray(0, cut));
+  assert.deepEqual(a.lines, []);
+  const b = takeLines(a.rest, line.subarray(cut));
+  assert.equal(JSON.parse(b.lines[0]).text, 'sửa lỗi đăng nhập');
+  assert.equal(b.rest.length, 0);
+});
+
+test('watcher keeps multi-byte text intact across partial writes', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chibi-codex-'));
+  const d = new Date();
+  const dir = path.join(home, 'sessions', String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0'));
+  fs.mkdirSync(dir, { recursive: true });
+  const got = [];
+  const w = watchCodex((evs) => got.push(...evs), { home, interval: 30 });
+  try {
+    await new Promise((r) => setTimeout(r, 80));
+    const file = path.join(dir, 'rollout-2026-10-18T10-00-00-01a14c00-0000-7000-8000-000000000002.jsonl');
+    fs.writeFileSync(file, JSON.stringify(line('session_meta', { id: 'vi-1', cwd: '/w/vi' })) + '\n');
+    await new Promise((r) => setTimeout(r, 120));
+    const bytes = Buffer.from(JSON.stringify(line('event_msg', { type: 'user_message', message: 'thêm tiếng Việt có dấu' })) + '\n');
+    const cut = bytes.indexOf(Buffer.from('ế')) + 1;
+    fs.appendFileSync(file, bytes.subarray(0, cut));
+    await new Promise((r) => setTimeout(r, 120));
+    fs.appendFileSync(file, bytes.subarray(cut));
+    await new Promise((r) => setTimeout(r, 120));
+  } finally {
+    w.stop();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+  assert.equal(got.find((e) => e.type === 'prompt')?.text, 'thêm tiếng Việt có dấu');
+});
+
+test('the same prompt typed twice shows twice; the second-channel copy does not', () => {
+  const ctx = createCodexContext('dup');
+  const t0 = Date.parse('2026-10-18T07:00:00.000Z');
+  const at = (ms) => new Date(t0 + ms).toISOString();
+  const prompts = [
+    line('event_msg', { type: 'user_message', message: 'tiếp tục' }, at(0)),
+    line('event_msg', { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text: 'tiếp tục' }] } }, at(3)),
+    line('event_msg', { type: 'user_message', message: 'tiếp tục' }, at(60000)),
+  ].flatMap((o) => normalizeCodexLine(o, ctx)).filter((e) => e.type === 'prompt');
+  assert.equal(prompts.length, 2);
+});
+
+test('quiet files are parked and resume from where they stopped', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chibi-codex-'));
+  const d = new Date();
+  const dir = path.join(home, 'sessions', String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0'));
+  fs.mkdirSync(dir, { recursive: true });
+  const got = [];
+  const w = watchCodex((evs) => got.push(...evs), { home, interval: 30, idleMs: 60 });
+  const file = path.join(dir, 'rollout-2026-10-18T10-00-00-01a14c00-0000-7000-8000-000000000003.jsonl');
+  try {
+    await new Promise((r) => setTimeout(r, 60));
+    fs.writeFileSync(file, JSON.stringify(line('session_meta', { id: 'park-1', cwd: '/w/park' })) + '\n');
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(w.files.has(file), false, 'parked after going quiet');
+    assert.equal(w.parked.has(file), true);
+    fs.appendFileSync(file, JSON.stringify(line('event_msg', { type: 'user_message', message: 'back again' })) + '\n');
+    await new Promise((r) => setTimeout(r, 150));
+  } finally {
+    w.stop();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+  const p = got.find((e) => e.type === 'prompt');
+  assert.equal(p?.text, 'back again');
+  assert.equal(p?.session, 'codex:park-1');
+  assert.equal(p?.cwd, '/w/park');
+});

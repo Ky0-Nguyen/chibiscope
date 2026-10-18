@@ -7,8 +7,10 @@
 //   GET  /api/health                       { name: 'chibiscope', version }
 //   POST /api/clear                        drop buffered events
 //
-// Binds to 127.0.0.1 and rejects foreign Host/Origin headers so a random web
-// page can neither read your prompts (DNS rebinding) nor inject events.
+// Binds to 127.0.0.1 and rejects foreign Host/Origin headers, so a web page
+// you visit can neither read your prompts (DNS rebinding) nor inject or clear
+// events. Programs running on this machine (curl, scripts) are not blocked:
+// they could read your agents' transcripts from ~/.claude and ~/.codex anyway.
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -37,6 +39,8 @@ export function createHub({ max = 3000 } = {}) {
   const events = [];
   const clients = new Set();
   let seq = 0;
+  let pending = [];
+  let timer = null;
   return {
     events,
     clients,
@@ -50,11 +54,40 @@ export function createHub({ max = 3000 } = {}) {
       const frame = list.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
       for (const res of clients) res.write(frame);
     },
+    /**
+     * Async hooks run in parallel, so a fast tool's PostToolUse can arrive
+     * before its PreToolUse. Hold hook events briefly and release them in hook
+     * time order, with each call's start ahead of its end.
+     */
+    pushSoon(list, delay = 150) {
+      pending.push(...list);
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        const batch = pending;
+        pending = [];
+        this.push(orderBatch(batch));
+      }, delay);
+    },
     clear() {
       events.length = 0;
+      pending = [];
       for (const res of clients) res.write(`event: clear\ndata: {}\n\n`);
     },
   };
+}
+
+export function orderBatch(batch) {
+  const key = (e) => `${e.session}|${e.call}`;
+  const ends = new Map();
+  for (const e of batch) if (e.type === 'tool.end' && e.call) ends.set(key(e), e.ts || 0);
+  const sortTs = (e) => {
+    const t = e.ts || 0;
+    // a start never sorts after its own end, even if its hook process started later
+    if (e.type === 'tool.start' && e.call && ends.has(key(e))) return Math.min(t, ends.get(key(e)) - 0.5);
+    return t;
+  };
+  return batch.map((e, i) => ({ e, i, t: sortTs(e) })).sort((a, b) => a.t - b.t || a.i - b.i).map((x) => x.e);
 }
 
 function readBody(req, limit = 4 << 20) {
@@ -129,7 +162,7 @@ export function startServer({ port = DEFAULT_PORT, host = '127.0.0.1', codex = t
         try { payload = JSON.parse(raw); } catch { return send(res, 400, { error: 'invalid json' }); }
         if (source !== 'events' && isDuplicate(payload)) return send(res, 200, { ok: true, accepted: 0, duplicate: true });
         const list = normalize(source === 'events' ? 'generic' : source, payload);
-        hub.push(list);
+        hub.pushSoon(list);
         return send(res, 200, { ok: true, accepted: list.length });
       }
 

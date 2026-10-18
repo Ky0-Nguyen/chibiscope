@@ -1,7 +1,7 @@
 {
   "name": "chibiscope-desktop",
   "productName": "ChibiScope",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ChibiScope desktop: watch your AI coding agents work from the menu bar.",
   "author": "Tuan Nguyen",
   "license": "MIT",

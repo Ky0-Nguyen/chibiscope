@@ -5,7 +5,7 @@
 export const CATEGORIES = ['read', 'search', 'write', 'shell', 'test', 'git', 'web', 'mcp', 'agent', 'plan', 'ask', 'other'];
 
 const TEST_RUNNER = /^(jest|vitest|pytest|py\.test|mocha|ava|playwright|cypress|rspec|phpunit|tox|nox|ctest|karma|detox|maestro)\b/;
-const TEST_VIA = /^(npm|pnpm|yarn|bun|npx|bunx|make|go|cargo|python3?|uv|poetry|deno|mvn|gradle|\.\/gradlew|gradlew|xcodebuild|swift|dotnet|flutter|dart|mix|rails|bundle|php|composer|turbo|nx)\b.*\b(test|tests|spec|e2e|vitest|jest|pytest|check)\b/;
+const TEST_VIA = /^(npm|pnpm|yarn|bun|npx|bunx|make|go|cargo|python3?|uv|poetry|deno|mvn|gradle|\.\/gradlew|gradlew|xcodebuild|swift|dotnet|flutter|dart|mix|rails|bundle|php|composer|turbo|nx)\b.*\b(test|tests|spec|e2e|vitest|jest|pytest)\b/; // not "check": lint:check, cargo check, typecheck are not tests
 const GIT = /^(git|gh|glab|hub)\b/;
 const READ = /^(cat|head|tail|less|more|bat|nl|wc|sed\s+-n|awk|jq|yq|stat|file|xxd|od|strings|plutil\s+-p)\b/;
 const SEARCH = /^(rg|grep|egrep|fgrep|ag|ack|fd|find|ls|tree|locate|which|du|mdfind)\b/;
