@@ -59,7 +59,10 @@ system tray, keeps the local server running, and opens the map in its own window
 - If a ChibiScope server is already running (CLI or editor extension), the app shares it instead of
   starting a second one.
 
-Build the installers:
+**Download:** [latest release](https://github.com/Ky0-Nguyen/chibiscope/releases/latest)
+(`ChibiScope-0.1.0-arm64.dmg` for Apple Silicon Macs).
+
+Or build the installers yourself:
 
 ```bash
 cd desktop
@@ -70,9 +73,12 @@ npm run dist:win     # NSIS installer (build on Windows for best results)
 npm run dist:linux   # AppImage
 ```
 
-The builds are not code-signed. On macOS, open the app the first time with right-click ▸ **Open**,
-or run `xattr -dr com.apple.quarantine /Applications/ChibiScope.app`. Windows SmartScreen asks once
-as well. The `--mac` build targets the current CPU; add `--x64` or `--universal` for Intel Macs.
+The builds are ad-hoc signed but not notarized, so macOS blocks the first launch. On macOS 15 and
+later, open the app once, click **Done**, then go to **System Settings ▸ Privacy & Security** and
+click **Open Anyway**. On macOS 14 and older, Control-click the app ▸ **Open**. Or remove the
+download flag in one go: `xattr -dr com.apple.quarantine /Applications/ChibiScope.app`. Windows
+SmartScreen asks once as well. The `--mac` build targets the current CPU; add `--x64` or
+`--universal` for Intel Macs.
 
 ## Install for someone else
 
