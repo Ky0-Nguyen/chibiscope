@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <mask id="face">
+      <rect width="32" height="32" fill="#fff"/>
+      <ellipse cx="11.6" cy="19.4" rx="2" ry="2.6" fill="#000"/>
+      <ellipse cx="20.4" cy="19.4" rx="2" ry="2.6" fill="#000"/>
+      <path d="M13.8 24.2 Q16 25.9 18.2 24.2" stroke="#000" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <path mask="url(#face)" d="M4.5 17.5 Q3.5 5 16 5 Q28.5 5 27.5 17.5 Q28 25 23 28.5 L9 28.5 Q4 25 4.5 17.5Z" fill="#000"/>
+  <path d="M16 5 Q17.5 1.8 20.5 2.2" stroke="#000" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <circle cx="21" cy="2.4" r="1.7" fill="#000"/>
+</svg>

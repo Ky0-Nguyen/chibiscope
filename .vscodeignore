@@ -1,0 +1,6 @@
+test/**
+.github/**
+*.vsix
+**/.DS_Store
+**/._*
+desktop/**

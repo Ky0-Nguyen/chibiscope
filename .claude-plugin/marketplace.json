@@ -1,0 +1,15 @@
+{
+  "name": "chibiscope",
+  "owner": { "name": "Tuan Nguyen" },
+  "metadata": {
+    "description": "ChibiScope: live chibi-style architecture map of what your AI coding agents are doing."
+  },
+  "plugins": [
+    {
+      "name": "chibiscope",
+      "source": "./",
+      "description": "Observe-only hooks that stream Claude Code activity to the local ChibiScope dashboard (http://127.0.0.1:4777).",
+      "version": "0.1.0"
+    }
+  ]
+}

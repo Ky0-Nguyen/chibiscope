@@ -1,0 +1,66 @@
+{
+  "name": "chibiscope-desktop",
+  "productName": "ChibiScope",
+  "version": "0.1.0",
+  "description": "ChibiScope desktop: watch your AI coding agents work from the menu bar.",
+  "author": "Tuan Nguyen",
+  "license": "MIT",
+  "type": "module",
+  "main": "main.mjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "io.chibiscope.desktop",
+    "productName": "ChibiScope",
+    "copyright": "Copyright © 2026 Tuan Nguyen",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.mjs",
+      "lib/**",
+      "assets/**",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "../src", "to": "chibiscope/src" },
+      { "from": "../web", "to": "chibiscope/web" },
+      { "from": "../hooks", "to": "chibiscope/hooks" },
+      { "from": "../package.json", "to": "chibiscope/package.json" }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.png",
+      "target": ["dmg", "zip"],
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "ChibiScope"
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": ["AppImage"],
+      "category": "Development"
+    }
+  }
+}

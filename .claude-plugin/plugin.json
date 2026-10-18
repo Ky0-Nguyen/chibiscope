@@ -1,0 +1,8 @@
+{
+  "name": "chibiscope",
+  "version": "0.1.0",
+  "description": "Watch Claude Code work live: a chibi walks a system-architecture map for every tool call, with a live sequence diagram. Observe-only async hooks.",
+  "author": { "name": "Tuan Nguyen" },
+  "license": "MIT",
+  "keywords": ["observability", "visualization", "hooks", "chibi", "architecture"]
+}

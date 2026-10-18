@@ -1,0 +1,105 @@
+{
+  "name": "chibiscope",
+  "displayName": "ChibiScope",
+  "version": "0.1.0",
+  "description": "Watch your AI coding agents (Claude Code, Codex, Cursor) work live: chibi characters walking a system-architecture map, plus a live sequence diagram.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Tuan Nguyen",
+  "publisher": "chibiscope",
+  "icon": "docs/icon.png",
+  "bin": {
+    "chibiscope": "bin/chibiscope.js"
+  },
+  "main": "./vscode/extension.cjs",
+  "engines": {
+    "node": ">=18.17",
+    "vscode": "^1.80.0"
+  },
+  "scripts": {
+    "start": "node bin/chibiscope.js start --open",
+    "demo": "node bin/chibiscope.js demo",
+    "test": "node --test test/*.test.js",
+    "package:vscode": "npx --yes @vscode/vsce package --no-dependencies"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "ai-agents",
+    "observability",
+    "visualization",
+    "chibi",
+    "architecture",
+    "hooks",
+    "vscode-extension"
+  ],
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "chibiscope.open",
+        "title": "ChibiScope: Open Agent Map",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "chibiscope.openBrowser",
+        "title": "ChibiScope: Open in Browser"
+      },
+      {
+        "command": "chibiscope.installClaude",
+        "title": "ChibiScope: Install Claude Code Hooks"
+      },
+      {
+        "command": "chibiscope.installCursor",
+        "title": "ChibiScope: Install Cursor Hooks"
+      },
+      {
+        "command": "chibiscope.demo",
+        "title": "ChibiScope: Play Demo"
+      }
+    ],
+    "configuration": {
+      "title": "ChibiScope",
+      "properties": {
+        "chibiscope.port": {
+          "type": "number",
+          "default": 4777,
+          "description": "Local port for the ChibiScope event server."
+        },
+        "chibiscope.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the local event server when the editor starts (needed to catch hook events)."
+        },
+        "chibiscope.watchCodex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Tail ~/.codex/sessions to visualize Codex runs."
+        }
+      }
+    }
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "web/",
+    "hooks/",
+    "commands/",
+    ".claude-plugin/",
+    "vscode/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ky0-Nguyen/chibiscope"
+  }
+}

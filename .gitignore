@@ -1,0 +1,5 @@
+node_modules/
+*.vsix
+*.chibiscope.bak
+.DS_Store
+._*

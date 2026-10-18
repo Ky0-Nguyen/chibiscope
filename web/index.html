@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChibiScope</title>
+  <meta name="description" content="Watch your AI coding agents work live: chibi characters walking a system-architecture map.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="favicon.svg" alt="" width="26" height="26">
+      <b>ChibiScope</b>
+      <span class="tagline">live agent architecture</span>
+    </div>
+    <div class="spacer"></div>
+    <span id="conn" class="pill">connecting…</span>
+    <button id="btn-demo" class="btn primary" title="Play a scripted demo (d)">▶ Demo</button>
+    <button id="btn-clear" class="btn" title="Clear all events">Clear</button>
+    <button id="btn-theme" class="btn" title="Theme: auto / pastel / blueprint">🌓 Auto</button>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="map-wrap">
+        <svg id="map" role="img" aria-label="Architecture map with agents"></svg>
+        <div id="empty" class="empty">
+          <div class="empty-card">
+            <div class="empty-art">😴</div>
+            <h2>No agents on the map yet</h2>
+            <p>Hook up your AI tools and they'll show up here as chibis.</p>
+            <ol>
+              <li><b>Claude Code</b> <code>npx chibiscope install claude</code> or the plugin</li>
+              <li><b>Cursor</b> <code>npx chibiscope install cursor</code></li>
+              <li><b>Codex</b> <span id="codex-status">auto-detected</span></li>
+            </ol>
+            <button id="empty-demo" class="btn primary">▶ Watch a demo</button>
+          </div>
+        </div>
+      </div>
+      <section class="seq">
+        <header class="seq-bar">
+          <b>Sequence</b>
+          <span id="seq-title" class="seq-title"></span>
+          <button id="seq-toggle" class="btn icon" title="Collapse / expand">▾</button>
+        </header>
+        <div id="seq" class="seq-body"></div>
+      </section>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <h3>Agents <button id="btn-all" class="link" hidden>show all</button></h3>
+        <div id="sessions" class="sessions"></div>
+      </section>
+      <section class="panel grow">
+        <h3>Timeline <span id="filter-note" class="muted"></span></h3>
+        <ol id="timeline" class="timeline"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
